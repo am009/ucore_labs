@@ -1,0 +1,20 @@
+define hook-stop
+x/10i $pc
+info registers
+info stack
+end
+
+
+
+file ~/ucore_labs/lab1_result/obj/bootblock.o
+symbol-file ~/ucore_labs/lab1_result/obj/bootblock.o
+#file ~/ucore_labs/lab1_result/bin/kernel
+directory ~/ucore_labs/lab1_result/
+
+#set arch i8086
+#b *0x7c00
+
+
+#target remote :1234
+#break bootmain
+#continue
