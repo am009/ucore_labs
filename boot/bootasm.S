@@ -8,6 +8,7 @@
 .set PROT_MODE_CSEG,        0x8                     # kernel code segment selector
 .set PROT_MODE_DSEG,        0x10                    # kernel data segment selector
 .set CR0_PE_ON,             0x1                     # protected mode enable flag
+.set SMAP,                  0x534d4150
 
 # start address should be 0:7c00, in real mode, the beginning address of the running bootloader
 .globl start
@@ -42,6 +43,25 @@ seta20.2:
     movb $0xdf, %al                                 # 0xdf -> port 0x60
     outb %al, $0x60                                 # 0xdf = 11011111, means set P2's A20 bit(the 1 bit) to 1
 
+probe_memory: #内存探测
+    movl $0, 0x8000          #设置一个存放内存映射地址描述符的物理地址(这里是0x8000)
+    xorl %ebx, %ebx
+    movw $0x8004, %di
+start_probe:
+    movl $0xE820, %eax
+    movl $20, %ecx
+    movl $SMAP, %edx
+    int $0x15    #通过向INT 15h中断传入e820h参数来探测物理内存空间的信息
+    jnc cont
+    movw $12345, 0x8000
+    jmp finish_probe
+cont:              #通过检测eflags的CF位来判断探测是否结束。如果没有结束， 设置存放下一个内存映射地址描述符的物理地址，然后跳到上面；如果结束，则程序结束
+    addw $20, %di
+    incl 0x8000
+    cmpl $0, %ebx
+    jnz start_probe
+finish_probe:
+
     # Switch from real to protected mode, using a bootstrap GDT
     # and segment translation that makes virtual addresses
     # identical to physical addresses, so that the
@@ -74,6 +94,7 @@ protcseg:
 spin:
     jmp spin
 
+.data
 # Bootstrap GDT
 .p2align 2                                          # force 4 byte alignment
 gdt:

@@ -3,7 +3,6 @@
 #include <string.h>
 #include <sys/stat.h>
 
-//用来修饰boot的块，修改最后两字节为55aa
 int
 main(int argc, char *argv[]) {
     struct stat st;

@@ -1,10 +1,11 @@
-PROJ	:= challenge
+PROJ	:= 5
 EMPTY	:=
 SPACE	:= $(EMPTY) $(EMPTY)
 SLASH	:= /
 
 V       := @
-
+#need llvm/cang-3.5+
+#USELLVM := 1
 # try to infer the correct GCCPREFX
 ifndef GCCPREFIX
 GCCPREFIX := $(shell if i386-elf-objdump -i 2>&1 | grep '^elf32-i386$$' >/dev/null 2>&1; \
@@ -27,6 +28,8 @@ QEMU := $(shell if which qemu-system-i386 > /dev/null; \
 	then echo 'qemu-system-i386'; exit; \
 	elif which i386-elf-qemu > /dev/null; \
 	then echo 'i386-elf-qemu'; exit; \
+	elif which qemu > /dev/null; \
+	then echo 'qemu'; exit; \
 	else \
 	echo "***" 1>&2; \
 	echo "*** Error: Couldn't find a working QEMU executable." 1>&2; \
@@ -41,13 +44,21 @@ endif
 .DELETE_ON_ERROR:
 
 # define compiler and flags
-
+ifndef  USELLVM
 HOSTCC		:= gcc
 HOSTCFLAGS	:= -g -Wall -O2
-
 CC		:= $(GCCPREFIX)gcc
-CFLAGS	:= -fno-builtin -fno-PIC -Wall -ggdb -m32 -gstabs -nostdinc $(DEFS)
+CFLAGS	:= -march=i686 -fno-builtin -fno-PIC -Wall -ggdb -m32 -gstabs -nostdinc $(DEFS)
 CFLAGS	+= $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
+else
+HOSTCC		:= clang
+HOSTCFLAGS	:= -g -Wall -O2
+CC		:= clang
+CFLAGS	:= -march=i686 -fno-builtin -fno-PIC -Wall -g -m32 -nostdinc $(DEFS)
+CFLAGS	+= $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
+endif
+
+GDB		:= $(GCCPREFIX)gdb
 CTYPE	:= c S
 
 LD      := $(GCCPREFIX)ld
@@ -66,6 +77,9 @@ SED		:= sed
 SH		:= sh
 TR		:= tr
 TOUCH	:= touch -c
+
+TAR		:= tar
+ZIP		:= gzip
 
 OBJDIR	:= obj
 BINDIR	:= bin
@@ -112,14 +126,17 @@ $(call add_files_cc,$(call listf_cc,$(LIBDIR)),libs,)
 KINCLUDE	+= kern/debug/ \
 			   kern/driver/ \
 			   kern/trap/ \
-			   kern/mm/
+			   kern/mm/ \
+			   kern/libs/ \
+			   kern/sync/
 
 KSRCDIR		+= kern/init \
 			   kern/libs \
 			   kern/debug \
 			   kern/driver \
 			   kern/trap \
-			   kern/mm
+			   kern/mm \
+			   kern/sync
 
 KCFLAGS		+= $(addprefix -I,$(KINCLUDE))
 
@@ -140,6 +157,20 @@ $(kernel): $(KOBJS)
 
 $(call create_target,kernel)
 
+
+# create kernel_nopage target
+kernel_nopage = $(call totarget,kernel_nopage)
+
+$(kernel_nopage): tools/kernel_nopage.ld
+
+$(kernel_nopage): $(KOBJS)
+	@echo + ld $@
+	$(V)$(LD) $(LDFLAGS) -T tools/kernel_nopage.ld -o $@ $(KOBJS)
+	@$(OBJDUMP) -S $@ > $(call asmfile,kernel_nopage)
+	@$(OBJDUMP) -t $@ | $(SED) '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $(call symfile,kernel_nopage)
+
+$(call create_target,kernel)
+
 # -------------------------------------------------------------------
 
 # create bootblock
@@ -148,11 +179,10 @@ $(foreach f,$(bootfiles),$(call cc_compile,$(f),$(CC),$(CFLAGS) -Os -nostdinc))
 
 bootblock = $(call totarget,bootblock)
 
-$(bootblock): $(call toobj,$(bootfiles)) | $(call totarget,sign)
+$(bootblock): $(call toobj,boot/bootasm.S) $(call toobj,$(bootfiles)) | $(call totarget,sign)
 	@echo + ld $@
-	$(V)$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 $^ -o $(call toobj,bootblock)
+	$(V)$(LD) $(LDFLAGS) -N -T tools/boot.ld $^ -o $(call toobj,bootblock)
 	@$(OBJDUMP) -S $(call objfile,bootblock) > $(call asmfile,bootblock)
-	@$(OBJDUMP) -t $(call objfile,bootblock) | $(SED) '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $(call symfile,bootblock)
 	@$(OBJCOPY) -S -O binary $(call objfile,bootblock) $(call outfile,bootblock)
 	@$(call totarget,sign) $(call outfile,bootblock) $(bootblock)
 
@@ -169,7 +199,7 @@ $(call create_target_host,sign,sign)
 # create ucore.img
 UCOREIMG	:= $(call totarget,ucore.img)
 
-$(UCOREIMG): $(kernel) $(bootblock)
+$(UCOREIMG): $(kernel) $(bootblock) $(kernel_nopage)
 	$(V)dd if=/dev/zero of=$@ count=10000
 	$(V)dd if=$(bootblock) of=$@ conv=notrunc
 	$(V)dd if=$(kernel) of=$@ seek=1 conv=notrunc
@@ -180,8 +210,9 @@ $(call create_target,ucore.img)
 
 $(call finish_all)
 
-IGNORE_ALLDEPS	= clean \
-				  dist-clean \
+IGNORE_ALLDEPS	= gdb \
+				  clean \
+				  distclean \
 				  grade \
 				  touch \
 				  print-.+ \
@@ -194,44 +225,37 @@ endif
 # files for grade script
 
 TARGETS: $(TARGETS)
-all: $(TARGETS)
+
 .DEFAULT_GOAL := TARGETS
 
+QEMUOPTS = -hda $(UCOREIMG)
+
 .PHONY: qemu qemu-nox debug debug-nox
-lab1-mon: $(UCOREIMG)
-	$(V)$(TERMINAL) -e "$(QEMU) -S -s -d in_asm -D $(BINDIR)/q.log -monitor stdio -hda $< -serial null"
-	$(V)sleep 2
-	$(V)$(TERMINAL) -e "gdb -q -x tools/lab1init"
-debug-mon: $(UCOREIMG)
-#	$(V)$(QEMU) -S -s -monitor stdio -hda $< -serial null &
-	$(V)$(TERMINAL) -e "$(QEMU) -S -s -monitor stdio -hda $< -serial null"
-	$(V)sleep 2
-	$(V)$(TERMINAL) -e "gdb -q -x tools/moninit"
 qemu-mon: $(UCOREIMG)
-	$(V)$(QEMU) -monitor stdio -hda $< -serial null
+	$(V)$(QEMU)  -no-reboot -monitor stdio $(QEMUOPTS) -serial null
 qemu: $(UCOREIMG)
-	$(V)$(QEMU) -parallel stdio -hda $< -serial null
+	$(V)$(QEMU)  -no-reboot -parallel stdio $(QEMUOPTS) -serial null
 
 qemu-nox: $(UCOREIMG)
-	$(V)$(QEMU) -serial mon:stdio -hda $< -nographic
-TERMINAL        :=gnome-terminal
-gdb: $(UCOREIMG)
-	$(V)$(QEMU) -S -s -parallel stdio -hda $< -serial null
+	$(V)$(QEMU)  -no-reboot -serial mon:stdio $(QEMUOPTS) -nographic
+
+TERMINAL := gnome-terminal
+
 debug: $(UCOREIMG)
-	$(V)$(QEMU) -S -s -parallel stdio -hda $< -serial null &
+	$(V)$(QEMU) -S -s -parallel stdio $(QEMUOPTS) -serial null &
 	$(V)sleep 2
-	$(V)$(TERMINAL)  -e "cgdb -q -x tools/gdbinit"
-	
+	$(V)$(TERMINAL) -e "$(GDB) -q -x tools/gdbinit"
+
 debug-nox: $(UCOREIMG)
-	$(V)$(QEMU) -S -s -serial mon:stdio -hda $< -nographic &
+	$(V)$(QEMU) -S -s -serial mon:stdio $(QEMUOPTS) -nographic &
 	$(V)sleep 2
-	$(V)$(TERMINAL) -e "gdb -q -x tools/gdbinit"
+	$(V)$(TERMINAL) -e "$(GDB) -q -x tools/gdbinit"
 
 .PHONY: grade touch
 
 GRADE_GDB_IN	:= .gdb.in
 GRADE_QEMU_OUT	:= .qemu.out
-HANDIN			:= proj$(PROJ)-handin.tar.gz
+HANDIN			:= lab2-handin.tar.gz
 
 TOUCH_FILES		:= kern/trap/trap.c
 
@@ -247,18 +271,22 @@ touch:
 print-%:
 	@echo $($(shell echo $(patsubst print-%,%,$@) | $(TR) [a-z] [A-Z]))
 
-.PHONY: clean dist-clean handin packall
+.PHONY: clean distclean handin tags
 clean:
-	$(V)$(RM) $(GRADE_GDB_IN) $(GRADE_QEMU_OUT)
-	-$(RM) -r $(OBJDIR) $(BINDIR)
+	$(V)$(RM) $(GRADE_GDB_IN) $(GRADE_QEMU_OUT) cscope* tags
+	$(V)$(RM) -r $(OBJDIR) $(BINDIR)
 
-dist-clean: clean
-	-$(RM) $(HANDIN)
+distclean: clean
+	$(V)$(RM) $(HANDIN)
 
-handin: packall
-	@echo Please visit http://learn.tsinghua.edu.cn and upload $(HANDIN). Thanks!
-
-packall: clean
-	@$(RM) -f $(HANDIN)
-	@tar -czf $(HANDIN) `find . -type f -o -type d | grep -v '^\.*$$' | grep -vF '$(HANDIN)'`
-
+handin: distclean
+	$(V)$(TAR) -cf - `find . -type f -o -type d | grep -v '^\.$$' | grep -v '/CVS/' \
+					| grep -v '/\.git/' | grep -v '/\.svn/' | grep -v "$(HANDIN)"` \
+					| $(ZIP) > $(HANDIN)
+					
+tags:
+	@echo TAGS ALL
+	$(V)rm -f cscope.files cscope.in.out cscope.out cscope.po.out tags
+	$(V)find . -type f -name "*.[chS]" >cscope.files
+	$(V)cscope -bq 
+	$(V)ctags -L cscope.files
