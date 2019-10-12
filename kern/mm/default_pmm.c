@@ -2,6 +2,7 @@
 #include <list.h>
 #include <string.h>
 #include <default_pmm.h>
+#include <stdio.h>
 
 /*  In the First Fit algorithm, the allocator keeps a list of free blocks
  * (known as the free list). Once receiving a allocation request for memory,
@@ -93,7 +94,7 @@
  *      Try to merge blocks at lower or higher addresses. Notice: This should
  *  change some pages' `p->property` correctly.
  */
-free_area_t free_area;
+free_area_t free_area; // 保存free的page数目
 
 #define free_list (free_area.free_list)
 #define nr_free (free_area.nr_free)
@@ -116,7 +117,8 @@ default_init_memmap(struct Page *base, size_t n) {
     base->property = n;
     SetPageProperty(base);
     nr_free += n;
-    list_add(&free_list, &(base->page_link));
+    // 如果扫描的初始化是从前往后，每次都从最后加入就可以保证顺序，加在头结点的前面就是最后
+    list_add_before(&free_list, &(base->page_link));
 }
 
 static struct Page *
@@ -134,14 +136,17 @@ default_alloc_pages(size_t n) {
             break;
         }
     }
-    if (page != NULL) {
+    if (page != NULL) { // 此时le就是page的pagelink。
+        le = list_prev(le);
         list_del(&(page->page_link));
         if (page->property > n) {
             struct Page *p = page + n;
             p->property = page->property - n;
-            list_add(&free_list, &(p->page_link));
-    }
+            SetPageProperty(p);
+            list_add(le, &(p->page_link));
+        }
         nr_free -= n;
+//        默认free_list里面的都是有property，没有reserved的，所以先unlink再去掉property
         ClearPageProperty(page);
     }
     return page;
@@ -159,13 +164,14 @@ default_free_pages(struct Page *base, size_t n) {
     base->property = n;
     SetPageProperty(base);
     list_entry_t *le = list_next(&free_list);
-    while (le != &free_list) {
+    while (le != &free_list) { // 纯merge的while循环 小心前后同时合并的情况。。。
         p = le2page(le, page_link);
         le = list_next(le);
         if (base + base->property == p) {
             base->property += p->property;
             ClearPageProperty(p);
             list_del(&(p->page_link));
+            break;
         }
         else if (p + p->property == base) {
             p->property += base->property;
@@ -173,14 +179,29 @@ default_free_pages(struct Page *base, size_t n) {
             base = p;
             list_del(&(p->page_link));
         }
+        else if (p > base + base->property) {
+            le = &p->page_link;
+            break;
+        }
     }
     nr_free += n;
-    list_add(&free_list, &(base->page_link));
+    list_add_before(le, &(base->page_link));
 }
 
 static size_t
 default_nr_free_pages(void) {
     return nr_free;
+}
+
+static void
+print_status(void) {
+    list_entry_t *le = &free_list;
+    cprintf("----start----\n");
+    while ((le = list_next(le)) != &free_list) {
+        struct Page *p = le2page(le, page_link);
+        cprintf("[debug] chunk: 0x%08x ---%d --- 0x%08x\n", p, p->property, p + p->property);
+    }
+    cprintf("----end----\n");
 }
 
 static void

@@ -89,7 +89,7 @@ pa2page(uintptr_t pa) {
     if (PPN(pa) >= npage) {
         panic("pa2page called with invalid pa");
     }
-    return &pages[PPN(pa)];
+    return &pages[PPN(pa)]; // 取物理地址的前20bit作为序号（下标）
 }
 
 static inline void *

@@ -189,10 +189,11 @@ nr_free_pages(void) {
 /* pmm_init - initialize the physical memory management */
 static void
 page_init(void) {
-    struct e820map *memmap = (struct e820map *)(0x8000 + KERNBASE);
+    struct e820map *memmap = (struct e820map *)(0x8000 + KERNBASE); // 获取之前的内存探测结果
     uint64_t maxpa = 0;
 
     cprintf("e820map:\n");
+    cprintf("  memory type 1 stands for available, 2 means reserved.\n");
     int i;
     for (i = 0; i < memmap->nr_map; i ++) {
         uint64_t begin = memmap->map[i].addr, end = begin + memmap->map[i].size;
@@ -204,22 +205,24 @@ page_init(void) {
             }
         }
     }
+    cprintf("  maxpa: %08x\n", maxpa);
     if (maxpa > KMEMSIZE) {
         maxpa = KMEMSIZE;
     }
 
     extern char end[];
 
-    npage = maxpa / PGSIZE;
-    pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);
+    npage = maxpa / PGSIZE; // 直接把能用的物理地址的最大值之前的全部map到页表里了
+    // 给每一个物理页对应建立一个页结构
+    pages = (struct Page *)ROUNDUP((void *)end, PGSIZE); // 程序末尾的下一个页边界上建立链表页结构数组
 
     for (i = 0; i < npage; i ++) {
         SetPageReserved(pages + i);
     }
 
-    uintptr_t freemem = PADDR((uintptr_t)pages + sizeof(struct Page) * npage);
+    uintptr_t freemem = PADDR((uintptr_t)pages + sizeof(struct Page) * npage); // 取pages结束的物理地址
 
-    for (i = 0; i < memmap->nr_map; i ++) {
+    for (i = 0; i < memmap->nr_map; i ++) { // 初始化之后的所有内存
         uint64_t begin = memmap->map[i].addr, end = begin + memmap->map[i].size;
         if (memmap->map[i].type == E820_ARM) {
             if (begin < freemem) {
@@ -254,7 +257,7 @@ boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size, uintptr_t pa, uint32_t
     for (; n > 0; n --, la += PGSIZE, pa += PGSIZE) {
         pte_t *ptep = get_pte(pgdir, la, 1);
         assert(ptep != NULL);
-        *ptep = pa | PTE_P | perm;
+        *ptep = pa | PTE_P | perm; // 赋值页表项
     }
 }
 
@@ -275,7 +278,7 @@ boot_alloc_page(void) {
 void
 pmm_init(void) {
     // We've already enabled paging
-    boot_cr3 = PADDR(boot_pgdir);
+    boot_cr3 = PADDR(boot_pgdir); // 得到之前设置的页表项
 
     //We need to alloc/free the physical memory (granularity is 4KB or other size). 
     //So a framework of physical memory manager (struct pmm_manager)is defined in pmm.h
@@ -293,11 +296,12 @@ pmm_init(void) {
 
     check_pgdir();
 
-    static_assert(KERNBASE % PTSIZE == 0 && KERNTOP % PTSIZE == 0);
+    static_assert(KERNBASE % PTSIZE == 0 && KERNTOP % PTSIZE == 0); // PTSIZE是4M
 
     // recursively insert boot_pgdir in itself
     // to form a virtual page table at virtual address VPT
-    boot_pgdir[PDX(VPT)] = PADDR(boot_pgdir) | PTE_P | PTE_W;
+    // 页目录表自我映射
+    boot_pgdir[PDX(VPT)] = PADDR(boot_pgdir) | PTE_P | PTE_W; // 特权级是kernel
 
     // map all physical memory to linear memory with base linear addr KERNBASE
     // linear_addr KERNBASE ~ KERNBASE + KMEMSIZE = phy_addr 0 ~ KMEMSIZE
@@ -347,18 +351,25 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
      *   PTE_W           0x002                   // page table/directory entry flags bit : Writeable
      *   PTE_U           0x004                   // page table/directory entry flags bit : User can access
      */
-#if 0
-    pde_t *pdep = NULL;   // (1) find page directory entry
-    if (0) {              // (2) check if entry is not present
+#if 1
+    pde_t *pdep = pgdir + PDX(la);   // (1) find page directory entry
+    if (!((*pdep) & PTE_P)) {              // (2) check if entry is not present
                           // (3) check if creating is needed, then alloc page for page table
+        if(!create) {
+            return NULL;
+        }
+        struct Page * p = alloc_page();
+        if (p == NULL) {
+            return NULL;
+        }
                           // CAUTION: this page is used for page table, not for common data page
-                          // (4) set page reference
-        uintptr_t pa = 0; // (5) get linear address of page
-                          // (6) clear page content using memset
-                          // (7) set page directory entry's permission
+        set_page_ref(p,1);                  // (4) set page reference
+        uintptr_t pa = page2pa(p); // (5) get linear address of page
+        memset(KADDR(pa),0,PGSIZE);                  // (6) clear page content using memset
+        *pdep = pa | PTE_P | PTE_W | PTE_U;                  // (7) set page directory entry's permission
     }
-    return NULL;          // (8) return page table entry
-#endif
+    return &((pde_t *)KADDR(PDE_ADDR(*pdep)))[PTX(la)];          // (8) return page table entry
+#endif  // /(ㄒoㄒ)/~~页表存的是物理地址！！
 }
 
 //get_page - get related Page struct for linear address la using PDT pgdir
@@ -382,6 +393,7 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
     /* LAB2 EXERCISE 3: YOUR CODE
      *
      * Please check if ptep is valid, and tlb must be manually updated if mapping is updated
+     * .tlb: translation lookaside buffer,是那块cache。。。
      *
      * Maybe you want help comment, BELOW comments can help you finish the code
      *
@@ -395,13 +407,15 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
      * DEFINEs:
      *   PTE_P           0x001                   // page table/directory entry flags bit : Present
      */
-#if 0
-    if (0) {                      //(1) check if this page table entry is present
-        struct Page *page = NULL; //(2) find corresponding page to pte
-                                  //(3) decrease page reference
-                                  //(4) and free this page when page reference reachs 0
-                                  //(5) clear second page table entry
-                                  //(6) flush tlb
+#if 1
+    if (*ptep & PTE_P) {                      //(1) check if this page table entry is present
+        struct Page *page = pte2page(*ptep); //(2) find corresponding page to pte
+        page_ref_dec(page);                          //(3) decrease page reference
+        if (page->ref == 0) {
+            free_page(page);
+        }                          //(4) and free this page when page reference reachs 0
+        *ptep = 0;                          //(5) clear second page table entry
+        tlb_invalidate(pgdir,la);                          //(6) flush tlb
     }
 #endif
 }

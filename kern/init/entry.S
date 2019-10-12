@@ -3,7 +3,7 @@
 
 #define REALLOC(x) (x - KERNBASE)
 
-.text
+.text  # 建立临时页表，然后跳转到真正的0xc0000000之后的地址。因为现在内核的链接地址已经变成0xc0000000之后的了
 .globl kern_entry
 kern_entry:
     # load pa of boot pgdir
@@ -43,7 +43,7 @@ spin:
 .align PGSIZE
     .globl bootstack
 bootstack:
-    .space KSTACKSIZE
+    .space KSTACKSIZE # 4k * 2  大概0xc0117000 - 0xc0118fff
     .globl bootstacktop
 bootstacktop:
 
@@ -53,7 +53,7 @@ bootstacktop:
 .section .data.pgdir
 .align PGSIZE
 __boot_pgdir:
-.globl __boot_pgdir
+.globl __boot_pgdir # 0x0010b000
     # map va 0 ~ 4M to pa 0 ~ 4M (temporary)
     .long REALLOC(__boot_pt1) + (PTE_P | PTE_U | PTE_W)
     .space (KERNBASE >> PGSHIFT >> 10 << 2) - (. - __boot_pgdir) # pad to PDE of KERNBASE

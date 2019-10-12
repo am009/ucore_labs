@@ -44,6 +44,7 @@ endif
 .DELETE_ON_ERROR:
 
 # define compiler and flags
+# CFLAGS	:= -march=i686 -fno-builtin -fno-PIC -Wall -ggdb -m32 -gdwarf-4 -gstabs -nostdinc $(DEFS)
 ifndef  USELLVM
 HOSTCC		:= gcc
 HOSTCFLAGS	:= -g -Wall -O2
@@ -240,6 +241,8 @@ qemu-nox: $(UCOREIMG)
 	$(V)$(QEMU)  -no-reboot -serial mon:stdio $(QEMUOPTS) -nographic
 
 TERMINAL := gnome-terminal
+gdb: $(UCOREIMG)
+	$(V)$(QEMU) -S -s -parallel stdio $(QEMUOPTS) -serial null
 
 debug: $(UCOREIMG)
 	$(V)$(QEMU) -S -s -parallel stdio $(QEMUOPTS) -serial null &

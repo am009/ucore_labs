@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <intr.h>
 #include <kmonitor.h>
+#include <kdebug.h> // 因为print_stackframe报错加上的
 
 static bool is_panic = 0;
 
@@ -31,7 +32,7 @@ __panic(const char *file, int line, const char *fmt, ...) {
 panic_dead:
     intr_disable();
     while (1) {
-        kmonitor(NULL);
+        kmonitor(NULL); // 命令行
     }
 }
 

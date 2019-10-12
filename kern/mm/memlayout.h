@@ -74,8 +74,8 @@
 #include <atomic.h>
 #include <list.h>
 
-typedef uintptr_t pte_t;
-typedef uintptr_t pde_t;
+typedef uintptr_t pte_t; // 页表表项
+typedef uintptr_t pde_t; // 页目录表项
 
 // some constants for bios interrupt 15h AX = 0xE820
 #define E820MAX             20      // number of entries in E820MAP
@@ -96,7 +96,7 @@ struct e820map {
  * physical page. In kern/mm/pmm.h, you can find lots of useful functions
  * that convert Page to other data types, such as phyical address.
  * */
-struct Page {
+struct Page { // 大小是10进制的20字节
     int ref;                        // page frame's reference counter
     uint32_t flags;                 // array of flags that describe the status of the page frame
     unsigned int property;          // the num of free block, used in first fit pm manager
