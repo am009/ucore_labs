@@ -364,12 +364,27 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
     *   mm->pgdir : the PDT of these vma
     *
     */
-#if 0
+#if 1
     /*LAB3 EXERCISE 1: YOUR CODE*/
-    ptep = ???              //(1) try to find a pte, if pte's PT(Page Table) isn't existed, then create a PT.
+    ptep = get_pte(mm->pgdir, addr, 1);              //(1) try to find a pte, if pte's PT(Page Table) isn't existed, then create a PT.
+    if (ptep == NULL) {
+        cprintf("get_pte in do_pgfault failed\n");
+        goto failed;
+    }
     if (*ptep == 0) {
                             //(2) if the phy addr isn't exist, then alloc a page & map the phy addr with logical addr
-
+        // my answer
+        // struct Page* page = alloc_page();
+        // if (page == NULL) {
+        //     goto failed;
+        // }
+        // memset(page2kva(page), 0, PGSIZE);
+        // *ptep = page2pa(page) | PTE_P | perm;
+        // lab3 answer
+        if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL) {
+            cprintf("pgdir_alloc_page in do_pgfault failed\n");
+            goto failed;
+        }
     }
     else {
     /*LAB3 EXERCISE 2: YOUR CODE
@@ -389,6 +404,17 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
                                     //    into the memory which page managed.
                                     //(2) According to the mm, addr AND page, setup the map of phy addr <---> logical addr
                                     //(3) make the page swappable.
+            // my answer
+            // swap_in(mm, addr, &page);
+            // *ptep = page2pa(page) | perm;
+            // lab3 answer
+            if ((ret = swap_in(mm, addr, &page)) != 0) {
+                cprintf("swap_in in do_pgfault failed\n");
+                goto failed;
+            }    
+            page_insert(mm->pgdir, page, addr, perm);
+            swap_map_swappable(mm, addr, page, 1);
+            page->pra_vaddr = addr;
         }
         else {
             cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);

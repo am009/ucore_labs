@@ -559,14 +559,14 @@ static void
 check_boot_pgdir(void) {
     pte_t *ptep;
     int i;
-    for (i = 0; i < npage; i += PGSIZE) {
+    for (i = 0; i < npage; i += PGSIZE) { // npages页所有物理内存都被boot_map_segment函数成功映射到0xC000 0000后
         assert((ptep = get_pte(boot_pgdir, (uintptr_t)KADDR(i), 0)) != NULL);
         assert(PTE_ADDR(*ptep) == i);
     }
 
-    assert(PDE_ADDR(boot_pgdir[PDX(VPT)]) == PADDR(boot_pgdir));
+    assert(PDE_ADDR(boot_pgdir[PDX(VPT)]) == PADDR(boot_pgdir)); //检查页表自身映射
 
-    assert(boot_pgdir[0] == 0);
+    assert(boot_pgdir[0] == 0); // 前4M的映射在entry.S被正确拆除
 
     struct Page *p;
     p = alloc_page();
