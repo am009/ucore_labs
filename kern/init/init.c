@@ -22,6 +22,7 @@ kern_init(void) {
     extern char edata[], end[];// edata是data段结束，bss段开始的指针， end是bss段结束指针， 定义在kernel.ld中
     memset(edata, 0, end - edata); // 把bss段清零
 
+    // cga_colorful = 1; change cga color by every char
     cons_init();                // init the console
 
     const char *message = "(THU.CST) os is loading ...";

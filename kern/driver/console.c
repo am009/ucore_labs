@@ -7,6 +7,7 @@
 #include <trap.h>
 #include <memlayout.h>
 #include <sync.h>
+#include <console.h>
 
 /* stupid I/O delay routine necessitated by historical PC design flaws */
 static void
@@ -135,12 +136,25 @@ lpt_putc(int c) {
     }
 }
 
+
+int default_cga_color = (CGA_FG_COLOR(CGA_WHITE) | CGA_BG_COLOR(CGA_BLACK));
+bool cga_colorful = 0;
+static int current_color = 0x0;
+
 /* cga_putc - print character to console */
 static void
 cga_putc(int c) {
     // set black on white
     if (!(c & ~0xFF)) {
-        c |= 0x0700;
+        if (cga_colorful) {
+            if ( (current_color & 0xf) == ((default_cga_color & 0xf000) >> 12) ) {
+                current_color += 1;
+            }
+            c |= (CGA_FG_COLOR(current_color & 0xf) | (default_cga_color & 0xf000));
+            current_color += 1;
+        } else {
+            c |= (default_cga_color & 0xff00);
+        }
     }
 
     switch (c & 0xff) {
@@ -399,7 +413,8 @@ kbd_proc_data(void) {
 }
 
 /* kbd_intr - try to feed input characters from keyboard */
-static void
+// static void
+void
 kbd_intr(void) {
     cons_intr(kbd_proc_data);
 }

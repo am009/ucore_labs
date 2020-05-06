@@ -200,6 +200,12 @@ trap_dispatch(struct trapframe *tf) {
         ticks ++;
         if (ticks % TICK_NUM == 0) {
             print_ticks();
+            int fg_color = ((default_cga_color + 0x100) & 0xf00); // chage cga color every tick
+            // cprintf("current color %x, fg_color: %x\n", ((default_cga_color & 0xf000) >> 4), fg_color); 
+            if ( ((default_cga_color & 0xf000) >> 4) == fg_color ) {
+                fg_color = ((fg_color + 0x100) & 0xf00);
+            }
+            default_cga_color = (default_cga_color & 0xf000) | fg_color;
         }
         break;
     case IRQ_OFFSET + IRQ_COM1:
@@ -232,7 +238,7 @@ trap_dispatch(struct trapframe *tf) {
             tf->tf_cs = KERNEL_CS;
             tf->tf_ds = tf->tf_es = KERNEL_DS;
             tf->tf_eflags &= ~FL_IOPL_MASK;
-            switchu2k = (struct trapframe *)(tf->tf_esp - (sizeof(struct trapframe) - 8));
+            switchu2k = (struct trapframe *)(tf->tf_esp - (sizeof(struct trapframe) - 8)); // trap frame bottom? - small trap frame size
             memmove(switchu2k, tf, sizeof(struct trapframe) - 8);
             *((uint32_t *)tf - 1) = (uint32_t)switchu2k;
         }
