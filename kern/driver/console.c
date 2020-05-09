@@ -413,7 +413,6 @@ kbd_proc_data(void) {
 }
 
 /* kbd_intr - try to feed input characters from keyboard */
-// static void
 void
 kbd_intr(void) {
     cons_intr(kbd_proc_data);
@@ -441,13 +440,13 @@ cons_init(void) {
 void
 cons_putc(int c) {
     bool intr_flag;
-    local_intr_save(intr_flag); // 保存中断位到变量里面（通过宏定义），并且确保中断位是0.
+    local_intr_save(intr_flag);
     {
         lpt_putc(c);
         cga_putc(c);
         serial_putc(c);
     }
-    local_intr_restore(intr_flag); // 恢复中断位
+    local_intr_restore(intr_flag);
 }
 
 /* *

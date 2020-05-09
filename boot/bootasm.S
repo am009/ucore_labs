@@ -26,10 +26,10 @@ start:
     # Enable A20:
     #  For backwards compatibility with the earliest PCs, physical
     #  address line 20 is tied low, so that addresses higher than
-    #  1MB wrap around to zero by default. This code undoes this.#有关8042寄存器
+    #  1MB wrap around to zero by default. This code undoes this.
 seta20.1:
-    inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).#读0x64是读Status Register
-    testb $0x2, %al                           #逻辑与运算，取第二位，input register (60h/64h) 有数据
+    inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).
+    testb $0x2, %al
     jnz seta20.1
 
     movb $0xd1, %al                                 # 0xd1 -> port 0x64
@@ -43,19 +43,19 @@ seta20.2:
     movb $0xdf, %al                                 # 0xdf -> port 0x60
     outb %al, $0x60                                 # 0xdf = 11011111, means set P2's A20 bit(the 1 bit) to 1
 
-probe_memory: #内存探测
-    movl $0, 0x8000          #设置一个存放内存映射地址描述符的物理地址(这里是0x8000)
+probe_memory:
+    movl $0, 0x8000
     xorl %ebx, %ebx
     movw $0x8004, %di
 start_probe:
     movl $0xE820, %eax
     movl $20, %ecx
     movl $SMAP, %edx
-    int $0x15    #通过向INT 15h中断传入e820h参数来探测物理内存空间的信息
+    int $0x15
     jnc cont
     movw $12345, 0x8000
     jmp finish_probe
-cont:              #通过检测eflags的CF位来判断探测是否结束。如果没有结束， 设置存放下一个内存映射地址描述符的物理地址，然后跳到上面；如果结束，则程序结束
+cont:
     addw $20, %di
     incl 0x8000
     cmpl $0, %ebx
@@ -86,9 +86,9 @@ protcseg:
     movw %ax, %ss                                   # -> SS: Stack Segment
 
     # Set up the stack pointer and call into C. The stack region is from 0--start(0x7c00)
-    movl $0x0, %ebp # wtf?
+    movl $0x0, %ebp
     movl $start, %esp
-    call bootmain  # 0x7d10
+    call bootmain
 
     # If bootmain returns (it shouldn't), loop.
 spin:
@@ -103,5 +103,5 @@ gdt:
     SEG_ASM(STA_W, 0x0, 0xffffffff)                 # data seg for bootloader and kernel
 
 gdtdesc:
-    .word 0x17                                      # sizeof(gdt) - 1 #这个段用来加载到gdtr寄存器
+    .word 0x17                                      # sizeof(gdt) - 1
     .long gdt                                       # address gdt

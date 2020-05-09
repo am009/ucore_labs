@@ -10,6 +10,7 @@
 #include <error.h>
 #include <swap.h>
 #include <vmm.h>
+#include <kmalloc.h>
 
 /* *
  * Task State Segment:
@@ -202,7 +203,7 @@ nr_free_pages(void) {
 /* pmm_init - initialize the physical memory management */
 static void
 page_init(void) {
-    struct e820map *memmap = (struct e820map *)(0x8000 + KERNBASE); // 获取之前的内存探测结果
+    struct e820map *memmap = (struct e820map *)(0x8000 + KERNBASE);
     uint64_t maxpa = 0;
 
     cprintf("e820map:\n");
@@ -223,17 +224,16 @@ page_init(void) {
 
     extern char end[];
 
-    npage = maxpa / PGSIZE; // 直接把能用的物理地址的最大值之前的全部map到页表里了
-    // 给每一个物理页对应建立一个页结构
-    pages = (struct Page *)ROUNDUP((void *)end, PGSIZE); // 程序末尾的下一个页边界上建立链表页结构数组
+    npage = maxpa / PGSIZE;
+    pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);
 
     for (i = 0; i < npage; i ++) {
         SetPageReserved(pages + i);
     }
 
-    uintptr_t freemem = PADDR((uintptr_t)pages + sizeof(struct Page) * npage); // 取pages结束的物理地址
+    uintptr_t freemem = PADDR((uintptr_t)pages + sizeof(struct Page) * npage);
 
-    for (i = 0; i < memmap->nr_map; i ++) { // 初始化之后的所有内存
+    for (i = 0; i < memmap->nr_map; i ++) {
         uint64_t begin = memmap->map[i].addr, end = begin + memmap->map[i].size;
         if (memmap->map[i].type == E820_ARM) {
             if (begin < freemem) {
@@ -268,7 +268,7 @@ boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size, uintptr_t pa, uint32_t
     for (; n > 0; n --, la += PGSIZE, pa += PGSIZE) {
         pte_t *ptep = get_pte(pgdir, la, 1);
         assert(ptep != NULL);
-        *ptep = pa | PTE_P | perm; // 赋值页表项
+        *ptep = pa | PTE_P | perm;
     }
 }
 
@@ -289,7 +289,7 @@ boot_alloc_page(void) {
 void
 pmm_init(void) {
     // We've already enabled paging
-    boot_cr3 = PADDR(boot_pgdir); // 得到之前设置的页表项
+    boot_cr3 = PADDR(boot_pgdir);
 
     //We need to alloc/free the physical memory (granularity is 4KB or other size). 
     //So a framework of physical memory manager (struct pmm_manager)is defined in pmm.h
@@ -307,12 +307,11 @@ pmm_init(void) {
 
     check_pgdir();
 
-    static_assert(KERNBASE % PTSIZE == 0 && KERNTOP % PTSIZE == 0); // PTSIZE是4M
+    static_assert(KERNBASE % PTSIZE == 0 && KERNTOP % PTSIZE == 0);
 
     // recursively insert boot_pgdir in itself
     // to form a virtual page table at virtual address VPT
-    // 页目录表自我映射
-    boot_pgdir[PDX(VPT)] = PADDR(boot_pgdir) | PTE_P | PTE_W; // 特权级是kernel
+    boot_pgdir[PDX(VPT)] = PADDR(boot_pgdir) | PTE_P | PTE_W;
 
     // map all physical memory to linear memory with base linear addr KERNBASE
     // linear_addr KERNBASE ~ KERNBASE + KMEMSIZE = phy_addr 0 ~ KMEMSIZE
@@ -329,6 +328,8 @@ pmm_init(void) {
     check_boot_pgdir();
 
     print_pgdir();
+
+    kmalloc_init();
 
 }
 
@@ -404,7 +405,6 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
     /* LAB2 EXERCISE 3: YOUR CODE
      *
      * Please check if ptep is valid, and tlb must be manually updated if mapping is updated
-     * .tlb: translation lookaside buffer,是那块cache。。。
      *
      * Maybe you want help comment, BELOW comments can help you finish the code
      *
@@ -559,14 +559,14 @@ static void
 check_boot_pgdir(void) {
     pte_t *ptep;
     int i;
-    for (i = 0; i < npage; i += PGSIZE) { // npages页所有物理内存都被boot_map_segment函数成功映射到0xC000 0000后
+    for (i = 0; i < npage; i += PGSIZE) {
         assert((ptep = get_pte(boot_pgdir, (uintptr_t)KADDR(i), 0)) != NULL);
         assert(PTE_ADDR(*ptep) == i);
     }
 
-    assert(PDE_ADDR(boot_pgdir[PDX(VPT)]) == PADDR(boot_pgdir)); //检查页表自身映射
+    assert(PDE_ADDR(boot_pgdir[PDX(VPT)]) == PADDR(boot_pgdir));
 
-    assert(boot_pgdir[0] == 0); // 前4M的映射在entry.S被正确拆除
+    assert(boot_pgdir[0] == 0);
 
     struct Page *p;
     p = alloc_page();
@@ -652,24 +652,3 @@ print_pgdir(void) {
     cprintf("--------------------- END ---------------------\n");
 }
 
-void *
-kmalloc(size_t n) {
-    void * ptr=NULL;
-    struct Page *base=NULL;
-    assert(n > 0 && n < 1024*0124);
-    int num_pages=(n+PGSIZE-1)/PGSIZE;
-    base = alloc_pages(num_pages);
-    assert(base != NULL);
-    ptr=page2kva(base);
-    return ptr;
-}
-
-void 
-kfree(void *ptr, size_t n) {
-    assert(n > 0 && n < 1024*0124);
-    assert(ptr != NULL);
-    struct Page *base=NULL;
-    int num_pages=(n+PGSIZE-1)/PGSIZE;
-    base = kva2page(ptr);
-    free_pages(base, num_pages);
-}

@@ -11,6 +11,7 @@
 #include <vmm.h>
 #include <ide.h>
 #include <swap.h>
+#include <proc.h>
 #include <kmonitor.h>
 
 int kern_init(void) __attribute__((noreturn));
@@ -19,8 +20,8 @@ static void lab1_switch_test(void);
 
 int
 kern_init(void) {
-    extern char edata[], end[];// edata是data段结束，bss段开始的指针， end是bss段结束指针， 定义在kernel.ld中
-    memset(edata, 0, end - edata); // 把bss段清零
+    extern char edata[], end[];
+    memset(edata, 0, end - edata);
 
     // cga_colorful = 1; change cga color by every char
     cons_init();                // init the console
@@ -38,6 +39,7 @@ kern_init(void) {
     idt_init();                 // init interrupt descriptor table
 
     vmm_init();                 // init virtual memory management
+    proc_init();                // init process table
 
     ide_init();                 // init ide devices
     swap_init();                // init swap
@@ -49,8 +51,7 @@ kern_init(void) {
     // user/kernel mode switch test
     //lab1_switch_test();
 
-    /* do nothing */
-    while (1);
+    cpu_idle();                 // run idle process
 }
 
 void __attribute__((noinline))
@@ -94,24 +95,11 @@ lab1_print_cur_status(void) {
 static void
 lab1_switch_to_user(void) {
     //LAB1 CHALLENGE 1 : TODO
-	asm volatile (
-	    "sub $0x8, %%esp \n"
-	    "int %0 \n"
-	    "movl %%ebp, %%esp"
-	    :
-	    : "i"(T_SWITCH_TOU)
-	);
 }
 
 static void
 lab1_switch_to_kernel(void) {
     //LAB1 CHALLENGE 1 :  TODO
-	asm volatile (
-	    "int %0 \n"
-	    "movl %%ebp, %%esp \n"
-	    :
-	    : "i"(T_SWITCH_TOK)
-	);
 }
 
 static void

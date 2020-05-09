@@ -74,8 +74,8 @@
 #include <atomic.h>
 #include <list.h>
 
-typedef uintptr_t pte_t; // 页表表项
-typedef uintptr_t pde_t; // 页目录表项
+typedef uintptr_t pte_t;
+typedef uintptr_t pde_t;
 typedef pte_t swap_entry_t; //the pte can also be a swap entry
 
 // some constants for bios interrupt 15h AX = 0xE820
@@ -97,7 +97,7 @@ struct e820map {
  * physical page. In kern/mm/pmm.h, you can find lots of useful functions
  * that convert Page to other data types, such as phyical address.
  * */
-struct Page { // 大小是10进制的20字节
+struct Page {
     int ref;                        // page frame's reference counter
     uint32_t flags;                 // array of flags that describe the status of the page frame
     unsigned int property;          // the num of free block, used in first fit pm manager
@@ -126,6 +126,7 @@ typedef struct {
     list_entry_t free_list;         // the list header
     unsigned int nr_free;           // # of free pages in this free list
 } free_area_t;
+
 
 #endif /* !__ASSEMBLER__ */
 
