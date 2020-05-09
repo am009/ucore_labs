@@ -136,7 +136,10 @@ default_alloc_pages(size_t n) {
             break;
         }
     }
+    // my answer
     if (page != NULL) { // 此时le就是page的pagelink。
+        // 我先删除了要返回的pagelink，再插入到page前面一项的后面
+        // 而答案则是先把新的插入到page后面再删除page，需要的操作更少，不过总体效果是一样的
         le = list_prev(le);
         list_del(&(page->page_link));
         if (page->property > n) {
@@ -149,6 +152,22 @@ default_alloc_pages(size_t n) {
 //        默认free_list里面的都是有property，没有reserved的，所以先unlink再去掉property
         ClearPageProperty(page);
     }
+    // lab2 answer
+//     if (page != NULL) {
+//         // 此时le就是page的pagelink，此时找到的page就是足够大的
+//         // 大小相等就从列表拿出直接返回，大小不同就切分，前面的返回，后面的新建一个Page。切分后插入到哪里？
+//         // first fit 算法要求空闲区按地址递增的次序排列。因此要插入到原来的位置。也就是
+//         if (page->property > n) {
+//             struct Page *p = page + n;
+//             p->property = page->property - n;
+//             SetPageProperty(p);
+//             list_add_after(&(page->page_link), &(p->page_link)); // add 就是add after
+//         }
+//         list_del(&(page->page_link));
+//         nr_free -= n;
+// //        默认free_list里面的都是有property，没有reserved的，所以先unlink再去掉property
+//         ClearPageProperty(page);
+//     }
     return page;
 }
 
@@ -164,6 +183,7 @@ default_free_pages(struct Page *base, size_t n) {
     base->property = n;
     SetPageProperty(base);
     list_entry_t *le = list_next(&free_list);
+    // my answer
     while (le != &free_list) { // 纯merge的while循环 小心前后同时合并的情况。。。
         p = le2page(le, page_link);
         le = list_next(le);
@@ -186,6 +206,33 @@ default_free_pages(struct Page *base, size_t n) {
     }
     nr_free += n;
     list_add_before(le, &(base->page_link));
+    // lab2 answer
+    // while (le != &free_list) {
+    //     p = le2page(le, page_link);
+    //     le = list_next(le);
+    //     if (base + base->property == p) {
+    //         base->property += p->property;
+    //         ClearPageProperty(p);
+    //         list_del(&(p->page_link));
+    //     }
+    //     else if (p + p->property == base) {
+    //         p->property += base->property;
+    //         ClearPageProperty(base);
+    //         base = p;
+    //         list_del(&(p->page_link));
+    //     }
+    // }
+    // nr_free += n;
+    // le = list_next(&free_list);
+    // while (le != &free_list) {
+    //     p = le2page(le, page_link);
+    //     if (base + base->property <= p) {
+    //         assert(base + base->property != p);
+    //         break;
+    //     }
+    //     le = list_next(le);
+    // }
+    // list_add_before(le, &(base->page_link));
 }
 
 static size_t
@@ -329,4 +376,3 @@ const struct pmm_manager default_pmm_manager = {
     .nr_free_pages = default_nr_free_pages,
     .check = default_check,
 };
-

@@ -52,9 +52,9 @@ _fifo_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int
     /*LAB3 EXERCISE 2: YOUR CODE*/ 
     //(1)link the most recent arrival page at the back of the pra_list_head qeueue.
     // my answer
-    // list_add_before(head, entry);
+    list_add_before(head, entry);
     // lab3 answer
-    list_add(head, entry);
+    // list_add(head, entry);
     return 0;
 }
 /*
@@ -72,18 +72,21 @@ _fifo_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick
      //(1)  unlink the  earliest arrival page in front of pra_list_head qeueue
      //(2)  assign the value of *ptr_page to the addr of this page
      // my answer
-    //  if (head->next != head) {
-    //      *ptr_page = (struct Page *)((&head->next) - offsetof(struct Page, pra_page_link));
-    //  }
-     list_del(head->next);
+     assert(head->next != head);
+     if (head->next != head) {
+         *ptr_page = (struct Page *)((char*)(head->next) - offsetof(struct Page, pra_page_link)); // debuged
+          list_del(head->next);
+     }
      // lab3 answer
     /* Select the tail */
-     list_entry_t *le = head->prev;
-     assert(head!=le);
-     struct Page *p = le2page(le, pra_page_link);
-     list_del(le);
-     assert(p !=NULL);
-     *ptr_page = p;
+    //  list_entry_t *le = head->prev;
+    //  assert(head!=le);
+    //  struct Page *p = le2page(le, pra_page_link);
+    // //  cprintf("swap_fifo: debug: le2page:%p, my addr: %p", le2page(le, pra_page_link), (struct Page *)((char*)(head->next) - offsetof(struct Page, pra_page_link)));
+    //  list_del(le);
+    //  assert(p !=NULL);
+    //  *ptr_page = p;
+
      return 0;
 }
 
