@@ -1,0 +1,1 @@
+# CFLAGS	:= -march=i686 -fno-builtin -fno-PIC -Wall -ggdb -m32 -gdwarf-4 -gstabs -nostdinc $(DEFS)
