@@ -53,18 +53,16 @@ idt_init(void) {
       *     You don't know the meaning of this instruction? just google it! and check the libs/x86.h to know more.
       *     Notice: the argument of lidt is idt_pd. try to find it!
       */
-    extern uintptr_t __vectors[]; // 把__vector的类型解释成地址（uint32）数组,作为存的返回地址
+     /* LAB5 YOUR CODE */ 
+     //you should update your lab1 code (just add ONE or TWO lines of code), let user app to use syscall to get the service of ucore
+     //so you should setup the syscall interrupt gate in here
+    extern uintptr_t __vectors[];
     int i;
     for (i = 0; i < sizeof(idt) / sizeof(struct gatedesc); i ++) {
         SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
     }
-	// set for switch from user to kernel
-    SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
-	// load the IDT
+    SETGATE(idt[T_SYSCALL], 1, GD_KTEXT, __vectors[T_SYSCALL], DPL_USER);
     lidt(&idt_pd);
-     /* LAB5 YOUR CODE */ 
-     //you should update your lab1 code (just add ONE or TWO lines of code), let user app to use syscall to get the service of ucore
-     //so you should setup the syscall interrupt gate in here
 }
 
 static const char *
@@ -219,7 +217,7 @@ trap_dispatch(struct trapframe *tf) {
         break;
     case IRQ_OFFSET + IRQ_TIMER:
 #if 0
-    LAB3 : If some page replacement algorithm(such as CLOCK PRA) need tick to change the priority of pages,
+    LAB3 : If some page replacement algorithm(such as CLOCK PRA) need tick to change the priority of pages, 
     then you can add code here. 
 #endif
         /* LAB1 YOUR CODE : STEP 3 */
@@ -228,22 +226,15 @@ trap_dispatch(struct trapframe *tf) {
          * (2) Every TICK_NUM cycle, you can print some info using a funciton, such as print_ticks().
          * (3) Too Simple? Yes, I think so!
          */
-        ticks ++;
-        if (ticks % TICK_NUM == 0) {
-            print_ticks();
-            int fg_color = ((default_cga_color + 0x100) & 0xf00); // chage cga color every tick
-            // cprintf("current color %x, fg_color: %x\n", ((default_cga_color & 0xf000) >> 4), fg_color); 
-            if ( ((default_cga_color & 0xf000) >> 4) == fg_color ) {
-                fg_color = ((fg_color + 0x100) & 0xf00);
-            }
-            default_cga_color = (default_cga_color & 0xf000) | fg_color;
-        }
-
         /* LAB5 YOUR CODE */
         /* you should upate you lab1 code (just add ONE or TWO lines of code):
          *    Every TICK_NUM cycle, you should set current process's current->need_resched = 1
          */
-  
+        ticks ++;
+        if (ticks % TICK_NUM == 0) {
+            assert(current != NULL);
+            current->need_resched = 1;
+        }
         break;
     case IRQ_OFFSET + IRQ_COM1:
         c = cons_getc();

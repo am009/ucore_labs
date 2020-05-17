@@ -328,7 +328,7 @@ pmm_init(void) {
     check_boot_pgdir();
 
     print_pgdir();
-
+    
     kmalloc_init();
 
 }
@@ -363,25 +363,30 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
      *   PTE_W           0x002                   // page table/directory entry flags bit : Writeable
      *   PTE_U           0x004                   // page table/directory entry flags bit : User can access
      */
-#if 1
-    pde_t *pdep = pgdir + PDX(la);   // (1) find page directory entry
-    if (!((*pdep) & PTE_P)) {              // (2) check if entry is not present
+#if 0
+    pde_t *pdep = NULL;   // (1) find page directory entry
+    if (0) {              // (2) check if entry is not present
                           // (3) check if creating is needed, then alloc page for page table
-        if(!create) {
-            return NULL;
-        }
-        struct Page * p = alloc_page();
-        if (p == NULL) {
-            return NULL;
-        }
                           // CAUTION: this page is used for page table, not for common data page
-        set_page_ref(p,1);                  // (4) set page reference
-        uintptr_t pa = page2pa(p); // (5) get linear address of page
-        memset(KADDR(pa),0,PGSIZE);                  // (6) clear page content using memset
-        *pdep = pa | PTE_P | PTE_W | PTE_U;                  // (7) set page directory entry's permission
+                          // (4) set page reference
+        uintptr_t pa = 0; // (5) get linear address of page
+                          // (6) clear page content using memset
+                          // (7) set page directory entry's permission
     }
-    return &((pde_t *)KADDR(PDE_ADDR(*pdep)))[PTX(la)];          // (8) return page table entry
-#endif  // /(ㄒoㄒ)/~~页表存的是物理地址！！
+    return NULL;          // (8) return page table entry
+#endif
+    pde_t *pdep = &pgdir[PDX(la)];
+    if (!(*pdep & PTE_P)) {
+        struct Page *page;
+        if (!create || (page = alloc_page()) == NULL) {
+            return NULL;
+        }
+        set_page_ref(page, 1);
+        uintptr_t pa = page2pa(page);
+        memset(KADDR(pa), 0, PGSIZE);
+        *pdep = pa | PTE_U | PTE_W | PTE_P;
+    }
+    return &((pte_t *)KADDR(PDE_ADDR(*pdep)))[PTX(la)];
 }
 
 //get_page - get related Page struct for linear address la using PDT pgdir
@@ -418,17 +423,23 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
      * DEFINEs:
      *   PTE_P           0x001                   // page table/directory entry flags bit : Present
      */
-#if 1
-    if (*ptep & PTE_P) {                      //(1) check if this page table entry is present
-        struct Page *page = pte2page(*ptep); //(2) find corresponding page to pte
-        page_ref_dec(page);                          //(3) decrease page reference
-        if (page->ref == 0) {
-            free_page(page);
-        }                          //(4) and free this page when page reference reachs 0
-        *ptep = 0;                          //(5) clear second page table entry
-        tlb_invalidate(pgdir,la);                          //(6) flush tlb
+#if 0
+    if (0) {                      //(1) check if page directory is present
+        struct Page *page = NULL; //(2) find corresponding page to pte
+                                  //(3) decrease page reference
+                                  //(4) and free this page when page reference reachs 0
+                                  //(5) clear second page table entry
+                                  //(6) flush tlb
     }
 #endif
+    if (*ptep & PTE_P) {
+        struct Page *page = pte2page(*ptep);
+        if (page_ref_dec(page) == 0) {
+            free_page(page);
+        }
+        *ptep = 0;
+        tlb_invalidate(pgdir, la);
+    }
 }
 
 void
@@ -510,6 +521,12 @@ copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end, bool share) {
          * (3) memory copy from src_kvaddr to dst_kvaddr, size is PGSIZE
          * (4) build the map of phy addr of  nage with the linear addr start
          */
+        void * kva_src = page2kva(page);
+        void * kva_dst = page2kva(npage);
+    
+        memcpy(kva_dst, kva_src, PGSIZE);
+
+        ret = page_insert(to, npage, start, perm);
         assert(ret == 0);
         }
         start += PGSIZE;
@@ -581,10 +598,6 @@ pgdir_alloc_page(pde_t *pgdir, uintptr_t la, uint32_t perm) {
                 page->pra_vaddr=la;
                 assert(page_ref(page) == 1);
                 //cprintf("get No. %d  page: pra_vaddr %x, pra_link.prev %x, pra_link_next %x in pgdir_alloc_page\n", (page-pages), page->pra_vaddr,page->pra_page_link.prev, page->pra_page_link.next);
-            } 
-        }
-            } 
-        }
             } 
             else  {  //now current is existed, should fix it in the future
                 //swap_map_swappable(current->mm, la, page, 0);
