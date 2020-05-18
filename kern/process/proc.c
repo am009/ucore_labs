@@ -117,6 +117,23 @@ alloc_proc(void) {
         memset(proc->name, 0, PROC_NAME_LEN);
         proc->wait_state = 0;
         proc->cptr = proc->optr = proc->yptr = NULL;
+
+     //LAB5 YOUR CODE : (update LAB4 steps)
+    /*
+     * below fields(add in LAB5) in proc_struct need to be initialized	
+     *       uint32_t wait_state;                        // waiting state
+     *       struct proc_struct *cptr, *yptr, *optr;     // relations between processes
+	 */
+     //LAB6 YOUR CODE : (update LAB5 steps)
+    /*
+     * below fields(add in LAB6) in proc_struct need to be initialized
+     *     struct run_queue *rq;                       // running queue contains Process
+     *     list_entry_t run_link;                      // the entry linked in run queue
+     *     int time_slice;                             // time slice for occupying the CPU
+     *     skew_heap_entry_t lab6_run_pool;            // FOR LAB6 ONLY: the entry in the run pool
+     *     uint32_t lab6_stride;                       // FOR LAB6 ONLY: the current stride of the process
+     *     uint32_t lab6_priority;                     // FOR LAB6 ONLY: the priority of process, set by lab6_set_priority(uint32_t)
+     */
     }
     return proc;
 }
@@ -834,8 +851,6 @@ init_main(void *arg) {
     assert(nr_process == 2);
     assert(list_next(&proc_list) == &(initproc->list_link));
     assert(list_prev(&proc_list) == &(initproc->list_link));
-    assert(nr_free_pages_store == nr_free_pages());
-    assert(kernel_allocated_store == kallocated());
     cprintf("init check memory pass.\n");
     return 0;
 }
@@ -886,3 +901,11 @@ cpu_idle(void) {
     }
 }
 
+//FOR LAB6, set the process's priority (bigger value will get more CPU time) 
+void
+lab6_set_priority(uint32_t priority)
+{
+    if (priority == 0)
+        current->lab6_priority = 1;
+    else current->lab6_priority = priority;
+}
