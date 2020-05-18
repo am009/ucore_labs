@@ -231,11 +231,17 @@ trap_dispatch(struct trapframe *tf) {
         /* you should upate you lab1 code (just add ONE or TWO lines of code):
          *    Every TICK_NUM cycle, you should set current process's current->need_resched = 1
          */
+        // lab6 my answer
+        // ticks ++;
+        // if (ticks % TICK_NUM == 0) {
+        //     assert(current != NULL);
+        //     // current->need_resched = 1;
+        //     sched_class_proc_tick(current);
+        // }
+        // lab6 answer 
         ticks ++;
-        if (ticks % TICK_NUM == 0) {
-            assert(current != NULL);
-            current->need_resched = 1;
-        }
+        assert(current != NULL);
+        sched_class_proc_tick(current);
         /* LAB6 YOUR CODE */
         /* you should upate you lab5 code
          * IMPORTANT FUNCTIONS:

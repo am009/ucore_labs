@@ -117,6 +117,17 @@ alloc_proc(void) {
         memset(proc->name, 0, PROC_NAME_LEN);
         proc->wait_state = 0;
         proc->cptr = proc->optr = proc->yptr = NULL;
+        // lab6 my answer 不懂
+        // proc->rq = NULL;
+        // proc->time_slice = 0;
+        // proc->lab6_run_pool;
+        // lab6 answer
+        proc->rq = NULL;
+        list_init(&(proc->run_link));
+        proc->time_slice = 0;
+        proc->lab6_run_pool.left = proc->lab6_run_pool.right = proc->lab6_run_pool.parent = NULL;
+        proc->lab6_stride = 0;
+        proc->lab6_priority = 0;
 
      //LAB5 YOUR CODE : (update LAB4 steps)
     /*
